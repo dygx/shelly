@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle avancé Shelly Plug S</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .status-box {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="time"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        #settingsData, #statusData {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .status-on {
+            background-color: #4CAF50;
+        }
+        .status-off {
+            background-color: #f44336;
+        }
+        #toggleButton.button-on {
+            background-color: #4CAF50;
+        }
+        #toggleButton.button-off {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>Contrôle avancé Shelly Plug S</h1>
+    
+    <div class="status-box">
+        <h2>État actuel</h2>
+        <div id="currentStatus">Chargement...</div>
+    </div>
+
+    <div class="status-box">
+        <h2>Contrôle</h2>
+        <button id="toggleButton" onclick="toggleRelay()">Allumer/Éteindre</button>
+    </div>
+
+    <div class="status-box">
+        <h2>Consommation d'énergie</h2>
+        <div id="energyData">Chargement...</div>
+        <div class="chart-container">
+            <canvas id="powerChart"></canvas>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <h2>Programmation horaire</h2>
+        <table id="scheduleTable">
+            <thead>
+                <tr>
+                    <th>Heure</th>
+                    <th>Action</th>
+                    <th>Actif</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Les éléments de programmation seront ajoutés ici -->
+            </tbody>
+        </table>
+        <button onclick="addScheduleItem()">Ajouter une programmation</button>
+    </div>
+
+    <div class="status-box">
+        <h2>Paramètres</h2>
+        <button onclick="getSettings()">Obtenir les paramètres</button>
+        <div id="settingsData"></div>
+    </div>
+
+    <script>
+        let powerChart;
+
+        function updateStatus() {
+            axios.get('/status')
+                .then(function (response) {
+                    const data = response.data.result;
+                    let statusHtml = '';
+                    if (data['switch:0']) {
+                        const isOn = data['switch:0'].output;
+                        statusHtml = `
+                            <p><span class="status-indicator ${isOn ? 'status-on' : 'status-off'}"></span>
+                            État : ${isOn ? 'Allumé' : 'Éteint'}</p>
+                            <p>Température : ${data['switch:0'].temperature.tC} °C</p>
+                            <p>WiFi RSSI : ${data.wifi.rssi} dBm</p>
+                        `;
+                        updateToggleButton(isOn);
+                    } else {
+                        statusHtml = `<p>État : Inconnu</p>`;
+                    }
+                    document.getElementById('currentStatus').innerHTML = statusHtml;
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    document.getElementById('currentStatus').innerText = 'Erreur de chargement du statut';
+                });
+        }
+
+        function updateToggleButton(isOn) {
+            const button = document.getElementById('toggleButton');
+            button.className = isOn ? 'button-on' : 'button-off';
+            button.textContent = isOn ? 'Éteindre' : 'Allumer';
+        }
+
+        function updateEnergyData() {
+            axios.get('/energy_data')
+                .then(function (response) {
+                    const data = response.data.result;
+                    let energyHtml = '';
+                    if (data.apower !== undefined) {
+                        energyHtml = `
+                            <p>Puissance actuelle : ${data.apower.toFixed(2)} W</p>
+                            <p>Énergie totale : ${data.aenergy.total.toFixed(2)} Wh</p>
+                            <p>Voltage : ${data.voltage.toFixed(2)} V</p>
+                            <p>Courant : ${data.current.toFixed(3)} A</p>
+                        `;
+                    } else {
+                        energyHtml = `<p>Données énergétiques non disponibles</p>`;
+                    }
+                    document.getElementById('energyData').innerHTML = energyHtml;
+                    
+                    // Mise à jour du graphique
+                    if (powerChart && data.apower !== undefined) {
+                        const now = new Date();
+                        powerChart.data.labels.push(now.toLocaleTimeString());
+                        powerChart.data.datasets[0].data.push(data.apower);
+                        if (powerChart.data.labels.length > 20) {
+                            powerChart.data.labels.shift();
+                            powerChart.data.datasets[0].data.shift();
+                        }
+                        powerChart.update();
+                    }
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    document.getElementById('energyData').innerText = 'Erreur de chargement des données énergétiques';
+                });
+        }
+
+        function toggleRelay() {
+            axios.post('/toggle')
+                .then(function (response) {
+                    updateStatus();
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors du basculement de l\'état');
+                });
+        }
+
+        function getSettings() {
+            axios.get('/settings')
+                .then(function (response) {
+                    console.log('Paramètres reçus:', response.data);
+                    const formattedData = JSON.stringify(response.data, null, 2)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/("\\w+")/g, '<span style="color: blue;">$1</span>')
+                        .replace(/: (\d+(\.\d+)?)/g, ': <span style="color: green;">$1</span>')
+                        .replace(/: (true|false)/g, ': <span style="color: red;">$1</span>');
+                    document.getElementById('settingsData').innerHTML = `<pre>${formattedData}</pre>`;
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    document.getElementById('settingsData').innerText = 'Erreur de chargement des paramètres';
+                });
+        }
+
+        function loadSchedule() {
+            axios.get('/schedule')
+                .then(function (response) {
+                    const scheduleTable = document.getElementById('scheduleTable').getElementsByTagName('tbody')[0];
+                    scheduleTable.innerHTML = '';
+                    response.data.forEach((item, index) => {
+                        const row = scheduleTable.insertRow();
+                        row.innerHTML = `
+                            <td><input type="time" value="${item.time}" onchange="updateScheduleItem(${index}, 'time', this.value)"></td>
+                            <td>
+                                <select onchange="updateScheduleItem(${index}, 'action', this.value)">
+                                    <option value="on" ${item.action === 'on' ? 'selected' : ''}>Allumer</option>
+                                    <option value="off" ${item.action === 'off' ? 'selected' : ''}>Éteindre</option>
+                                </select>
+                            </td>
+                            <td><input type="checkbox" ${item.active ? 'checked' : ''} onchange="updateScheduleItem(${index}, 'active', this.checked)"></td>
+                            <td><button onclick="deleteScheduleItem(${index})">Supprimer</button></td>
+                        `;
+                    });
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors du chargement de la programmation');
+                });
+        }
+
+        function addScheduleItem() {
+            const newItem = {
+                time: "00:00",
+                action: "on",
+                active: true
+            };
+            axios.get('/schedule')
+                .then(function (response) {
+                    const currentSchedule = response.data;
+                    currentSchedule.push(newItem);
+                    return axios.post('/schedule', currentSchedule);
+                })
+                .then(function (response) {
+                    loadSchedule();
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors de l\'ajout de la programmation');
+                });
+        }
+
+        function updateScheduleItem(index, field, value) {
+            axios.get('/schedule')
+                .then(function (response) {
+                    const currentSchedule = response.data;
+                    currentSchedule[index][field] = field === 'active' ? value : value;
+                    return axios.post('/schedule', currentSchedule);
+                })
+                .then(function (response) {
+                    loadSchedule();
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors de la mise à jour de la programmation');
+                });
+        }
+
+        function deleteScheduleItem(index) {
+            axios.get('/schedule')
+                .then(function (response) {
+                    const currentSchedule = response.data;
+                    currentSchedule.splice(index, 1);
+                    return axios.post('/schedule', currentSchedule);
+                })
+                .then(function (response) {
+                    loadSchedule();
+                })
+                .catch(function (error) {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors de la suppression de la programmation');
+                });
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('powerChart').getContext('2d');
+            powerChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Puissance (W)',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialisation
+        updateStatus();
+        updateEnergyData();
+        initChart();
+        loadSchedule();
+
+        // Mise à jour régulière du statut et des données énergétiques
+        setInterval(function() {
+            updateStatus();
+            updateEnergyData();
+        }, 5000);
+    </script>
+</body>
+</html>

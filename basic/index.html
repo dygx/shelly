@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle Shelly Plug S</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1, h2 { color: #333; }
+        button { background-color: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; margin: 5px; }
+        button:hover { background-color: #45a049; }
+        input[type="time"] { margin: 5px; }
+        #power-info { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Contrôle Shelly Plug S</h1>
+
+    <h2>Contrôle On/Off</h2>
+    <button onclick="turnOn()">Allumer</button>
+    <button onclick="turnOff()">Éteindre</button>
+
+    <h2>Programmer des plages horaires</h2>
+    <div>
+        <input type="time" id="start-time">
+        <input type="time" id="end-time">
+        <button onclick="setSchedule()">Définir la plage horaire</button>
+    </div>
+
+    <h2>Informations sur la puissance</h2>
+    <button onclick="getPowerInfo()">Obtenir les infos de puissance</button>
+    <div id="power-info"></div>
+
+    <script>
+        const SHELLY_IP = '192.168.1.51'; // Remplacez par l'adresse IP de votre Shelly Plug S
+
+        async function turnOn() {
+            try {
+                await axios.get(`http://${SHELLY_IP}/relay/0?turn=on`);
+                alert('Prise allumée');
+            } catch (error) {
+                console.error('Erreur lors de l\'allumage:', error);
+                alert('Erreur lors de l\'allumage de la prise');
+            }
+        }
+
+        async function turnOff() {
+            try {
+                await axios.get(`http://${SHELLY_IP}/relay/0?turn=off`);
+                alert('Prise éteinte');
+            } catch (error) {
+                console.error('Erreur lors de l\'extinction:', error);
+                alert('Erreur lors de l\'extinction de la prise');
+            }
+        }
+
+        async function setSchedule() {
+            const startTime = document.getElementById('start-time').value;
+            const endTime = document.getElementById('end-time').value;
+
+            if (!startTime || !endTime) {
+                alert('Veuillez sélectionner une heure de début et de fin');
+                return;
+            }
+
+            try {
+                // Ceci est une simulation. L'API réelle de Shelly peut différer.
+                await axios.post(`http://${SHELLY_IP}/settings`, {
+                    schedule: { start: startTime, end: endTime }
+                });
+                alert('Plage horaire définie');
+            } catch (error) {
+                console.error('Erreur lors de la définition de la plage horaire:', error);
+                alert('Erreur lors de la définition de la plage horaire');
+            }
+        }
+
+        async function getPowerInfo() {
+            try {
+                const response = await axios.get(`http://${SHELLY_IP}/meter/0`);
+                const powerInfo = response.data;
+                document.getElementById('power-info').innerHTML = `
+                    Puissance actuelle: ${powerInfo.power} W<br>
+                    Énergie totale: ${powerInfo.total} Wh
+                `;
+            } catch (error) {
+                console.error('Erreur lors de la récupération des infos de puissance:', error);
+                alert('Erreur lors de la récupération des infos de puissance');
+            }
+        }
+    </script>
+</body>
+</html>

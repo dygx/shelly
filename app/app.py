@@ -13,6 +13,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 SHELLY_IP = "192.168.1.51"  # Assurez-vous que cette adresse IP est correcte
+# should change this to be multi select
 SCHEDULE_FILE = 'schedule.json'
 
 # Vérifier si le fichier schedule.json existe, sinon le créer
